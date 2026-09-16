@@ -1,0 +1,914 @@
+﻿<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <!-- viewport-fit=cover — чтобы страница заходила под «чёлку» и скруглённые
+         углы iPhone; safe-area-inset в mobile.css вернёт нужные отступы. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <title>Jardin Rose | Салон авторской флористики и доставка цветов в Алматы</title>
+    <meta name="description" content="Цветочный салон Jardin Rose в Алматы. Авторские букеты, розы, пионы, доставка за 60 минут. Оплата картой и Kaspi QR.">
+    <meta name="theme-color" content="#F6D2D4">
+    <link rel="icon" type="image/png" href="static/img/favicon.png">
+
+    <!-- Установка на домашний экран телефона.
+         manifest — название, цвета и иконки «приложения» для Android;
+         apple-touch-icon — то же самое для iPhone, который манифест
+         читает частично и берёт иконку отсюда. -->
+    <link rel="manifest" href="static/manifest.webmanifest">
+    <link rel="apple-touch-icon" href="static/img/app-icon-192.png">
+    <meta name="apple-mobile-web-app-title" content="Jardin Rose">
+
+    <!-- ВСЁ ВНЕШНЕЕ ЛЕЖИТ ВНУТРИ ПРОЕКТА.
+         Раньше шрифты приходили с fonts.googleapis.com, а иконки —
+         с cdnjs.cloudflare.com. Без интернета заголовки теряли шрифт,
+         а вместо иконок появлялись пустые квадраты. Теперь эти файлы
+         скачаны в static/ и сайт открывается на любом компьютере и
+         телефоне даже без сети.
+         Скачивает их engine/assets.py: python -m engine.assets -->
+
+    <!-- Шрифты Cormorant Garamond, Montserrat, Parisienne -->
+    <link rel="stylesheet" href="static/css/fonts.css">
+    <!-- Иконки Font Awesome 6.5.1 -->
+    <link rel="stylesheet" href="static/vendor/fontawesome/css/all.min.css">
+
+    <!-- ПОРЯДОК ВАЖЕН: каждый следующий файл может переопределить предыдущий.
+         style.css      — базовое оформление по макету «проект.psd»
+         components.css — элементы, добавленные вместе с движком
+         animations.css — движение и анимации -->
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="static/css/components.css">
+    <link rel="stylesheet" href="static/css/animations.css">
+    <link rel="stylesheet" href="static/css/mobile.css">
+</head>
+<body>
+
+    <!-- Холст фоновой анимации: по нему падают лепестки (static/js/petals.js).
+         Лежит под всем содержимым и не перехватывает клики. -->
+    <canvas id="petalCanvas" aria-hidden="true"></canvas>
+
+    <!-- Верхняя шапка в точном соответствии с макетом проект.psd -->
+    <header class="psd-header" id="mainHeader">
+        <div class="container psd-header__container">
+            <!-- Левое меню (Помощь, О нас, Каталог) -->
+            <nav class="psd-nav psd-nav--left">
+                <a href="#help" class="psd-nav-link">Помощь</a>
+                <a href="#about" class="psd-nav-link">О нас</a>
+                <a href="#catalog" class="psd-nav-link">Каталог</a>
+            </nav>
+
+            <!-- Центральный логотип Jardin Rose (точно как в проект.psd) -->
+            <div class="psd-logo-wrapper">
+                <a href="#" class="psd-logo">
+                    <span class="psd-logo__icon">🌸</span>
+                    <span class="psd-logo__text">Jardin Rose</span>
+                </a>
+            </div>
+
+            <!-- Правое меню (Контакты, Доставка, Поиск) + Действия -->
+            <div class="psd-header__right">
+                <nav class="psd-nav psd-nav--right">
+                    <a href="#contacts" class="psd-nav-link">Контакты</a>
+                    <a href="#delivery" class="psd-nav-link">Доставка</a>
+                </nav>
+
+                <!-- Поле поиска (Поиск) -->
+                <div class="psd-search-box">
+                    <i class="fa-solid fa-magnifying-glass psd-search-icon"></i>
+                    <input type="text" id="searchInput" placeholder="Поиск цветов..." autocomplete="off">
+                    <button class="clear-search-btn" id="clearSearchBtn" aria-label="Очистить">&times;</button>
+                </div>
+
+                <!-- Кнопки Избранного и Корзины -->
+                <div class="psd-actions">
+                    <button class="psd-action-btn" id="wishlistBtn" title="Избранное" aria-label="Избранное">
+                        <i class="fa-regular fa-heart"></i>
+                        <span class="psd-badge" id="wishlistBadge">0</span>
+                    </button>
+
+                    <button class="psd-action-btn psd-cart-btn" id="cartBtn" title="Корзина" aria-label="Корзина">
+                        <i class="fa-solid fa-bag-shopping"></i>
+                        <span class="psd-badge" id="cartBadge">0</span>
+                        <span class="psd-cart-total" id="cartHeaderTotal">0 ₸</span>
+                    </button>
+                </div>
+
+                <!-- Бургер для мобильных устройств -->
+                <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Открыть меню">
+                    <span></span><span></span><span></span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Выпадающее меню для мобильных экранов -->
+        <div class="mobile-nav-drawer" id="mobileNavDrawer">
+            <!-- Поиск на узком экране прячется из шапки, поэтому он здесь.
+                 main.js связывает это поле с тем же фильтром каталога. -->
+            <div class="mobile-search">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="search" id="mobileSearchInput" placeholder="Поиск букетов…"
+                       autocomplete="off" enterkeyhint="search">
+            </div>
+
+            <a href="#catalog" class="mobile-nav-link">Каталог букетов</a>
+            <a href="#builder" class="mobile-nav-link">Конструктор букета</a>
+            <a href="#about" class="mobile-nav-link">О нас</a>
+            <a href="#help" class="mobile-nav-link">Помощь & FAQ</a>
+            <a href="#delivery" class="mobile-nav-link">Доставка и оплата</a>
+            <a href="#contacts" class="mobile-nav-link">Контакты</a>
+        </div>
+    </header>
+
+    <!-- Панорамный Hero-баннер из макета проект.psd (Фигура 1 / Слой 2: Париж, розы, Эйфелева башня) -->
+    <section class="psd-hero-banner">
+        <div class="psd-hero-banner__overlay"></div>
+        <div class="container psd-hero-banner__content">
+            <span class="psd-hero-sub">Салон авторской флористики</span>
+            <h1 class="psd-hero-title">Каждый букет говорит на языке цветов</h1>
+            <p class="psd-hero-desc">Отборные французские розы, пионы и авторские композиции с бережной доставкой за 60 минут в фирменной нежно-розовой гамме #F6D2D4.</p>
+            <div class="psd-hero-btns">
+                <a href="#catalog" class="btn btn--primary">
+                    <i class="fa-solid fa-flower"></i>
+                    <span>Выбрать букет в каталоге</span>
+                </a>
+                <a href="#builder" class="btn btn--outline">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                    <span>Собрать свой букет</span>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Быстрые преимущества доверия -->
+    <div class="trust-bar">
+        <div class="container trust-bar__container">
+            <div class="trust-item">
+                <i class="fa-solid fa-camera-retro"></i>
+                <div>
+                    <strong>Фото перед отправкой</strong>
+                    <span>Согласование композиции в WhatsApp</span>
+                </div>
+            </div>
+            <div class="trust-item">
+                <i class="fa-solid fa-truck-fast"></i>
+                <div>
+                    <strong>Срочная доставка от 60 мин</strong>
+                    <span>В специальном аквабоксе</span>
+                </div>
+            </div>
+            <div class="trust-item">
+                <i class="fa-solid fa-shield-heart"></i>
+                <div>
+                    <strong>100% гарантия свежести</strong>
+                    <span>Стойкость цветов до 10–14 дней</span>
+                </div>
+            </div>
+            <div class="trust-item">
+                <i class="fa-solid fa-gift"></i>
+                <div>
+                    <strong>Открытка в подарок</strong>
+                    <span>С вашим персональным текстом</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================================================================
+         ВЫБОР ПО ПОВОДУ
+         Приём взят у крупнейших цветочных сервисов мира (Bloom & Wild,
+         UrbanStems, Interflora). Наблюдение простое: человек редко ищет
+         «пионы» — он ищет «что подарить на день рождения». Поводы дают
+         самый короткий путь от намерения к нужному букету.
+         Плитки рисует main.js по данным из /api/occasions.
+         =================================================================== -->
+    <section class="section occasions-section" id="occasions">
+        <div class="container">
+            <div class="section-heading text-center">
+                <span class="section-subtitle">С чего начать</span>
+                <h2 class="section-title">Какой у вас повод?</h2>
+                <div class="divider-rose">🌸</div>
+            </div>
+            <div class="occasions-grid" id="occasionsGrid"></div>
+        </div>
+    </section>
+
+    <!-- Основной Каталог товаров -->
+    <section class="section catalog-section" id="catalog">
+        <div class="container">
+            <div class="section-heading text-center">
+                <span class="section-subtitle">Коллекция Jardin Rose</span>
+                <h2 class="section-title">Каталог авторских букетов</h2>
+                <div class="divider-rose">🌸</div>
+            </div>
+
+            <!-- Категории табами -->
+            <div class="categories-nav-wrapper">
+                <div class="categories-nav" id="categoryTabs">
+                    <button class="category-tab active" data-category="Все">Все букеты</button>
+                    <button class="category-tab" data-category="Розы">Пионовидные розы</button>
+                    <button class="category-tab" data-category="Пионы и Гортензии">Пионы & Гортензии</button>
+                    <button class="category-tab" data-category="В коробках">В шляпных коробках</button>
+                    <button class="category-tab" data-category="Авторские">Авторские миксы</button>
+                    <button class="category-tab" data-category="Монобукеты">Монобукеты</button>
+                </div>
+            </div>
+
+            <!-- Панель фильтров и сортировки -->
+            <div class="catalog-toolbar">
+                <div class="catalog-toolbar__left">
+                    <div class="filter-pill-group">
+                        <label class="filter-label">Цена, ₸:</label>
+                        <div class="price-input-wrapper">
+                            <input type="number" id="minPrice" placeholder="От 15 000" min="0" step="100">
+                            <span>—</span>
+                            <input type="number" id="maxPrice" placeholder="До 80 000" min="0" step="100">
+                        </div>
+                    </div>
+
+                    <div class="filter-checkbox-group">
+                        <label class="custom-checkbox">
+                            <input type="checkbox" id="filterInStock" checked>
+                            <span class="checkmark"></span>
+                            <span>Только в наличии</span>
+                        </label>
+                        <label class="custom-checkbox">
+                            <input type="checkbox" id="filterDiscount">
+                            <span class="checkmark"></span>
+                            <span>Со скидкой</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="catalog-toolbar__right">
+                    <span class="catalog-count" id="catalogCount">Показано: 0 товаров</span>
+                    <div class="sort-wrapper">
+                        <label for="sortSelect"><i class="fa-solid fa-arrow-down-wide-short"></i></label>
+                        <select id="sortSelect">
+                            <option value="popular">По популярности</option>
+                            <option value="cheap">Сначала доступные</option>
+                            <option value="expensive">Сначала премиум</option>
+                            <option value="rating">Высокий рейтинг</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Сетка товаров -->
+            <div class="products-grid" id="productGrid">
+                <!-- Карточки генерируются динамически через main.js -->
+            </div>
+
+            <!-- Состояние пустого каталога -->
+            <div class="empty-state" id="emptyCatalogState" style="display: none;">
+                <div class="empty-state__icon">🥀</div>
+                <h3>Букеты не найдены</h3>
+                <p>Попробуйте изменить параметры фильтрации или поисковый запрос.</p>
+                <button class="btn btn--primary" id="resetFiltersBtn">Сбросить фильтры</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Интерактивный Конструктор Букета -->
+    <section class="section builder-section" id="builder">
+        <div class="container">
+            <div class="builder-wrapper">
+                <div class="builder-header">
+                    <span class="section-subtitle">Индивидуальный заказ</span>
+                    <h2 class="section-title">Конструктор букета Jardin Rose</h2>
+                    <p class="builder-desc">Создайте букет своей мечты: выберите основу, зелень, фирменную упаковку в тоне #F6D2D4 и добавьте открытку с теплыми словами!</p>
+                </div>
+
+                <div class="builder-grid">
+                    <!-- Панель шагов конструктора -->
+                    <div class="builder-controls">
+                        <!-- Шаг 1: Цветы -->
+                        <div class="builder-step">
+                            <div class="step-title">
+                                <span class="step-num">1</span>
+                                <h4>Главные цветы (выберите один или несколько)</h4>
+                            </div>
+                            <div class="flower-selector-chips" id="flowerBaseOptions">
+                                <button type="button" class="chip active" data-name="Французские розы" data-price="10900" data-img="🌹">
+                                    <span class="chip-emoji">🌹</span>
+                                    <span class="chip-title">Французские розы (9 шт)</span>
+                                    <span class="chip-price">+10 900 ₸</span>
+                                </button>
+                                <button type="button" class="chip" data-name="Пышные пионы" data-price="16800" data-img="🌸">
+                                    <span class="chip-emoji">🌸</span>
+                                    <span class="chip-title">Пышные пионы Сара Бернар (7 шт)</span>
+                                    <span class="chip-price">+16 800 ₸</span>
+                                </button>
+                                <button type="button" class="chip" data-name="Облачная гортензия" data-price="9400" data-img="💐">
+                                    <span class="chip-emoji">💐</span>
+                                    <span class="chip-title">Облачная гортензия (2 ветки)</span>
+                                    <span class="chip-price">+9 400 ₸</span>
+                                </button>
+                                <button type="button" class="chip" data-name="Нежная эустома" data-price="7900" data-img="🌺">
+                                    <span class="chip-emoji">🌺</span>
+                                    <span class="chip-title">Нежная эустома (5 веток)</span>
+                                    <span class="chip-price">+7 900 ₸</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Шаг 2: Зелень -->
+                        <div class="builder-step">
+                            <div class="step-title">
+                                <span class="step-num">2</span>
+                                <h4>Флористическая зелень и акценты</h4>
+                            </div>
+                            <div class="flower-selector-chips" id="greeneryOptions">
+                                <button type="button" class="chip active" data-name="Эвкалипт цинерея" data-price="2900">
+                                    <span class="chip-emoji">🌿</span>
+                                    <span class="chip-title">Ароматный эвкалипт</span>
+                                    <span class="chip-price">+2 900 ₸</span>
+                                </button>
+                                <button type="button" class="chip" data-name="Веточки лаванды" data-price="2200">
+                                    <span class="chip-emoji">🌾</span>
+                                    <span class="chip-title">Лаванда</span>
+                                    <span class="chip-price">+2 200 ₸</span>
+                                </button>
+                                <button type="button" class="chip" data-name="Хлопок и гипсофила" data-price="2700">
+                                    <span class="chip-emoji">☁️</span>
+                                    <span class="chip-title">Хлопок и белая гипсофила</span>
+                                    <span class="chip-price">+2 700 ₸</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Шаг 3: Упаковка -->
+                        <div class="builder-step">
+                            <div class="step-title">
+                                <span class="step-num">3</span>
+                                <h4>Стиль упаковки Jardin Rose</h4>
+                            </div>
+                            <div class="package-options" id="packageOptions">
+                                <label class="package-card active">
+                                    <input type="radio" name="builder_pack" value="Матовая бумага Jardin Rose (#F6D2D4)" data-price="1900" checked>
+                                    <span class="pack-icon">🎀</span>
+                                    <span class="pack-name">Пудровый матовый фоамиран #F6D2D4</span>
+                                    <span class="pack-price">1 900 ₸</span>
+                                </label>
+                                <label class="package-card">
+                                    <input type="radio" name="builder_pack" value="Шляпная коробка Deluxe" data-price="5900">
+                                    <span class="pack-icon">🎁</span>
+                                    <span class="pack-name">Шляпная коробка Deluxe Rose</span>
+                                    <span class="pack-price">5 900 ₸</span>
+                                </label>
+                                <label class="package-card">
+                                    <input type="radio" name="builder_pack" value="Крафт с атласной лентой" data-price="1500">
+                                    <span class="pack-icon">📜</span>
+                                    <span class="pack-name">Эко-крафт с широкой атласной лентой</span>
+                                    <span class="pack-price">1 500 ₸</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Шаг 4: Открытка -->
+                        <div class="builder-step">
+                            <div class="step-title">
+                                <span class="step-num">4</span>
+                                <h4>Текст для бесплатной открытки</h4>
+                            </div>
+                            <textarea id="builderPostcardText" class="builder-textarea" placeholder="Напишите послание получателю (например: «С любовью и восхищением в этот прекрасный день!»)..." maxlength="250"></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Сводка и добавление в корзину -->
+                    <div class="builder-summary-card">
+                        <div class="summary-badge">Ваш авторский сет</div>
+                        <!-- Живое превью: main.js подставляет сюда фотографии
+                             выбранных цветов, зелени и упаковки. -->
+                        <div class="builder-preview" id="builderPreview">
+                            <div class="builder-preview__empty">
+                                <span>🌸</span>
+                                <p>Выберите цветы — букет появится здесь</p>
+                            </div>
+                        </div>
+
+                        <div class="summary-visual">
+                            <h3 id="builderBouquetTitle">Композиция «Jardin Romance»</h3>
+                        </div>
+
+                        <div class="summary-breakdown" id="builderBreakdown"></div>
+
+                        <div class="summary-bonus-pill">
+                            <i class="fa-solid fa-gift"></i>
+                            <span>Кризал + аквапак в подарок от салона</span>
+                        </div>
+
+                        <div class="summary-footer">
+                            <div class="summary-price-box">
+                                <span>Стоимость букета:</span>
+                                <strong id="builderTotalPrice">15 300 ₸</strong>
+                            </div>
+                            <button class="btn btn--primary btn--full" id="addCustomBouquetToCart">
+                                <i class="fa-solid fa-bag-shopping"></i>
+                                <span>Добавить в корзину</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Секция «О нас» (согласно пункту О нас из меню проект.psd) -->
+    <section class="section about-section" id="about">
+        <div class="container">
+            <div class="section-heading text-center">
+                <span class="section-subtitle">О салоне</span>
+                <h2 class="section-title">Французская эстетика в каждом цветке</h2>
+                <div class="divider-rose">🌸</div>
+            </div>
+
+            <div class="about-grid">
+                <div class="about-card">
+                    <div class="about-card__icon"><i class="fa-solid fa-seedling"></i></div>
+                    <h3>Прямые поставки</h3>
+                    <p>Каждое утро мы получаем свежие бутоны с лучших плантаций Эквадора, Голландии и Франции. Никаких увядших витринных остатков — только безупречная свежесть.</p>
+                </div>
+                <div class="about-card">
+                    <div class="about-card__icon"><i class="fa-solid fa-palette"></i></div>
+                    <h3>Цвет нежности #F6D2D4</h3>
+                    <p>Фирменный стиль Jardin Rose построен вокруг эстетичного пудрово-розового оттенка #F6D2D4 — символа утонченности, искренней любви и душевной теплоты.</p>
+                </div>
+                <div class="about-card">
+                    <div class="about-card__icon"><i class="fa-solid fa-award"></i></div>
+                    <h3>Мастера флористики</h3>
+                    <p>Наши флористы обучались во Франции и создают не просто букеты, а произведения искусства, собирая гармоничные композиции с учетом колористики и фактур.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Секция «Помощь & Уход» (согласно пункту Помощь из меню проект.psd) -->
+    <section class="section help-section" id="help">
+        <div class="container">
+            <div class="section-heading text-center">
+                <span class="section-subtitle">Забота о букете</span>
+                <h2 class="section-title">Помощь и секреты флористов</h2>
+                <div class="divider-rose">🌸</div>
+            </div>
+
+            <div class="care-cards-grid">
+                <div class="care-card">
+                    <div class="care-card__num">01</div>
+                    <div class="care-card__icon"><i class="fa-solid fa-scissors"></i></div>
+                    <h3>Косой срез под 45°</h3>
+                    <p>Острым секатором или ножом обновите стебли на 2 см под углом 45 градусов, чтобы площадь поглощения воды была максимальной.</p>
+                </div>
+                <div class="care-card">
+                    <div class="care-card__num">02</div>
+                    <div class="care-card__icon"><i class="fa-solid fa-glass-water"></i></div>
+                    <h3>Прохладная вода</h3>
+                    <p>Наливайте чистую фильтрованную прохладную воду. Меняйте воду в вазе каждые 1-2 дня и промывайте стебли.</p>
+                </div>
+                <div class="care-card">
+                    <div class="care-card__num">03</div>
+                    <div class="care-card__icon"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
+                    <h3>Подкормка Chrysal</h3>
+                    <p>Растворите пакетик кризала (прилагается бесплатно к заказу) для питания лепестков и дезинфекции воды.</p>
+                </div>
+                <div class="care-card">
+                    <div class="care-card__num">04</div>
+                    <div class="care-card__icon"><i class="fa-solid fa-snowflake"></i></div>
+                    <h3>Комфортный климат</h3>
+                    <p>Располагайте букет вдали от радиаторов отопления, прямых солнечных лучей, сквозняков и ваз со спелыми фруктами.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Секция Отзывов -->
+    <section class="section reviews-section" id="reviews">
+        <div class="container">
+            <div class="section-heading text-center">
+                <span class="section-subtitle">Истории наших клиентов</span>
+                <h2 class="section-title">Впечатления и отзывы</h2>
+                <div class="divider-rose">🌸</div>
+            </div>
+
+            <div class="reviews-grid">
+                <div class="review-card">
+                    <div class="review-header">
+                        <img src="static/img/reviews/anastasia.jpg" alt="Анастасия" class="review-avatar">
+                        <div>
+                            <h4>Анастасия Васильева</h4>
+                            <div class="review-stars">★★★★★</div>
+                        </div>
+                    </div>
+                    <p class="review-text">«Букет из роз в стилистике Jardin Rose невероятно красивый! Оттенок #F6D2D4 в жизни выглядит потрясающе нежно. Цветы простояли 12 дней!»</p>
+                    <span class="review-date">Вчера, букет «Розовая Мечта»</span>
+                </div>
+
+                <div class="review-card">
+                    <div class="review-header">
+                        <img src="static/img/reviews/mikhail.jpg" alt="Михаил" class="review-avatar">
+                        <div>
+                            <h4>Михаил Дмитриев</h4>
+                            <div class="review-stars">★★★★★</div>
+                        </div>
+                    </div>
+                    <p class="review-text">«Собрал авторский букет через конструктор, прикрепил текст поздравления. Доставили точно за 60 минут, девушка была в полном восторге!»</p>
+                    <span class="review-date">3 дня назад, Авторский сет</span>
+                </div>
+
+                <div class="review-card">
+                    <div class="review-header">
+                        <img src="static/img/reviews/ekaterina.jpg" alt="Екатерина" class="review-avatar">
+                        <div>
+                            <h4>Екатерина Климова</h4>
+                            <div class="review-stars">★★★★★</div>
+                        </div>
+                    </div>
+                    <p class="review-text">«Шляпная коробка от Jardin Rose — это эталон вкуса. Пышные пионы, нежнейшая лента и бесплатный кризал в комплекте. Спасибо флористам!»</p>
+                    <span class="review-date">Неделю назад, «Пудровый Шарм»</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Секция «Доставка» (согласно меню проект.psd) -->
+    <section class="section delivery-section" id="delivery">
+        <div class="container">
+            <div class="delivery-box">
+                <div class="delivery-info">
+                    <span class="section-subtitle">Сервис Jardin Rose</span>
+                    <h2 class="section-title">Бережная доставка по городу</h2>
+                    <p>Каждый букет доставляется курьером в герметичном аквапаке с водой, защищенным от ветра и перепадов температуры.</p>
+
+                    <ul class="delivery-list">
+                        <li>
+                            <i class="fa-solid fa-clock"></i>
+                            <div>
+                                <strong>Срочная доставка от 60 минут</strong>
+                                <span>Бережная доставка на авто в специальных термобоксах</span>
+                            </div>
+                        </li>
+                        <li>
+                            <i class="fa-solid fa-droplet"></i>
+                            <div>
+                                <strong>Транспортировка на воде (Aqua-pack)</strong>
+                                <span>Цветы непрерывно питаются чистой водой в дороге</span>
+                            </div>
+                        </li>
+                        <li>
+                            <i class="fa-solid fa-envelope"></i>
+                            <div>
+                                <strong>Бесплатная открытка с пожеланием</strong>
+                                <span>Напечатаем или аккуратно подпишем от руки ваш текст</span>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="delivery-card-visual">
+                    <div class="delivery-promo-card">
+                        <div class="promo-icon">🚚</div>
+                        <h3>Бесплатная доставка</h3>
+                        <p>При заказе на сумму от 20 000 ₸ доставка по Алматы бесплатна!</p>
+                        <div class="promo-steps">
+                            <span>Промокод: <strong>ROSE2026</strong> (-10%)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Подвал сайта (Контакты из меню проект.psd) -->
+    <footer class="psd-footer" id="contacts">
+        <div class="container psd-footer__container">
+            <div class="psd-footer__col">
+                <div class="psd-logo">
+                    <span class="psd-logo__icon">🌸</span>
+                    <span class="psd-logo__text">Jardin Rose</span>
+                </div>
+                <p class="psd-footer-desc">Салон авторской флористики и подарков. Изысканные букеты в фирменном пудровом оттенке #F6D2D4.</p>
+                <div class="psd-footer-socials">
+                    <a href="#" aria-label="Telegram"><i class="fa-brands fa-telegram"></i></a>
+                    <a href="#" aria-label="WhatsApp"><i class="fa-brands fa-whatsapp"></i></a>
+                    <a href="#" aria-label="VK"><i class="fa-brands fa-vk"></i></a>
+                    <a href="#" aria-label="Pinterest"><i class="fa-brands fa-pinterest"></i></a>
+                </div>
+            </div>
+
+            <div class="psd-footer__col">
+                <h4>Навигация</h4>
+                <ul>
+                    <li><a href="#catalog">Каталог букетов</a></li>
+                    <li><a href="#builder">Конструктор букета</a></li>
+                    <li><a href="#about">О салоне Jardin Rose</a></li>
+                    <li><a href="#help">Помощь и уход за цветами</a></li>
+                    <li><a href="#delivery">Условия доставки</a></li>
+                </ul>
+            </div>
+
+            <div class="psd-footer__col">
+                <h4>Контакты</h4>
+                <div class="psd-footer-contacts">
+                    <p><i class="fa-solid fa-location-dot"></i> Салон: г. Алматы, пр. Достык, 132</p>
+                    <p><i class="fa-solid fa-phone"></i> 8 800 080 55 77 · +7 (727) 355-11-88</p>
+                    <p><i class="fa-solid fa-envelope"></i> bonjour@jardinrose.kz</p>
+                    <p><i class="fa-solid fa-clock"></i> Ежедневно: 08:00 – 22:00</p>
+                </div>
+            </div>
+
+            <div class="psd-footer__col">
+                <h4>Скидка на заказ</h4>
+                <p style="font-size: 0.85rem; margin-bottom: 10px; color: #C2AEB1;">Подпишитесь и получите промокод на скидку 2 500 ₸:</p>
+                <div class="newsletter-input-group">
+                    <input type="email" id="newsletterEmail" placeholder="Ваш e-mail">
+                    <button id="newsletterBtn" aria-label="Подписаться"><i class="fa-solid fa-paper-plane"></i></button>
+                </div>
+            </div>
+        </div>
+
+        <div class="psd-footer__bottom">
+            <div class="container psd-footer__bottom-container">
+                <p>© 2026 Jardin Rose. Выполнено по макету «проект.psd» в фирменном цвете #F6D2D4.</p>
+                <div class="psd-footer-bottom-links">
+                    <a href="#">Политика конфиденциальности</a>
+                    <a href="#">Публичная оферта</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- ================== МОДАЛЬНЫЕ ОКНА ================== -->
+
+    <!-- Модальная выезжающая корзина -->
+    <div class="cart-drawer-overlay" id="cartOverlay">
+        <div class="cart-drawer" id="cartDrawer" role="dialog" aria-label="Корзина">
+            <div class="cart-drawer__header">
+                <div class="cart-drawer__title">
+                    <i class="fa-solid fa-bag-shopping"></i>
+                    <h3>Корзина Jardin Rose</h3>
+                    <span class="cart-drawer__count" id="cartDrawerCount">(0)</span>
+                </div>
+                <button class="cart-drawer__close" id="closeCartBtn" aria-label="Закрыть">&times;</button>
+            </div>
+
+            <!-- Прогресс бесплатной доставки -->
+            <div class="delivery-progress-box" id="deliveryProgressBox">
+                <div class="progress-text" id="deliveryProgressText">
+                    До бесплатной доставки осталось <strong>20 000 ₸</strong>
+                </div>
+                <div class="progress-bar-track">
+                    <div class="progress-bar-fill" id="deliveryProgressFill" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div class="cart-drawer__body" id="cartItemsContainer">
+                <!-- Товары в корзине -->
+            </div>
+
+            <div class="cart-drawer__footer" id="cartFooter">
+                <!-- Дополнения к букету: ваза, шоколад, шар.
+                     Так делают все крупные цветочные сервисы: предложить
+                     вазу человеку, который уже выбрал букет, — это помощь,
+                     а не навязчивая реклама. Список рисует main.js
+                     по данным из /api/addons. -->
+                <div class="addons-box" id="addonsBox">
+                    <div class="addons-box__title">
+                        <i class="fa-solid fa-gift"></i>
+                        <span>Добавить к букету</span>
+                    </div>
+                    <div class="addons-row" id="addonsRow"></div>
+                </div>
+
+                <!-- Открытка -->
+                <div class="cart-postcard-toggle">
+                    <button type="button" class="btn-toggle-postcard" id="togglePostcardBtn">
+                        <i class="fa-solid fa-envelope-open-text"></i>
+                        <span>Добавить текст открытки в подарок</span>
+                        <i class="fa-solid fa-chevron-down toggle-icon"></i>
+                    </button>
+                    <div class="postcard-input-collapse" id="postcardCollapse" style="display: none;">
+                        <textarea id="cartPostcardMessage" placeholder="Текст для поздравительной открытки..."></textarea>
+                    </div>
+                </div>
+
+                <!-- Промокод -->
+                <div class="promo-box">
+                    <div class="promo-input-group">
+                        <input type="text" id="promoCodeInput" placeholder="Промокод (ROSE2026)">
+                        <button type="button" id="applyPromoBtn">Применить</button>
+                    </div>
+                    <div class="promo-message" id="promoMessage"></div>
+                </div>
+
+                <!-- Итоги -->
+                <div class="cart-summary-totals">
+                    <div class="summary-line">
+                        <span>Букеты (<span id="cartSummaryItemsCount">0</span> шт.):</span>
+                        <span id="cartSubtotal">0 ₸</span>
+                    </div>
+                    <div class="summary-line discount-line" id="discountRow" style="display: none;">
+                        <span>Скидка:</span>
+                        <span id="cartDiscount">-0 ₸</span>
+                    </div>
+                    <div class="summary-line">
+                        <span>Доставка курьером:</span>
+                        <span id="cartDeliveryCost">Бесплатно</span>
+                    </div>
+                    <div class="summary-line total-line">
+                        <span>Итого к оплате:</span>
+                        <strong id="cartFinalTotal">0 ₸</strong>
+                    </div>
+                </div>
+
+                <button class="btn btn--primary btn--full" id="proceedToCheckoutBtn">
+                    <span>Перейти к оформлению</span>
+                    <i class="fa-solid fa-arrow-right"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно оформления заказа (Checkout) -->
+    <div class="modal-backdrop" id="checkoutModal" style="display: none;">
+        <div class="modal-window checkout-modal-window" role="dialog" aria-label="Оформление заказа">
+            <button class="modal-close-btn" id="closeCheckoutBtn">&times;</button>
+            
+            <div class="modal-header">
+                <span class="modal-subtitle">Jardin Rose Boutique</span>
+                <h2>Оформление доставки букета</h2>
+                <div class="divider-rose">🌸</div>
+            </div>
+
+            <form id="checkoutForm" class="checkout-form">
+                <div class="checkout-form-grid">
+                    <!-- Заказчик -->
+                    <div class="form-section">
+                        <h4>1. Данные заказчика</h4>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="orderSenderName">Ваше имя *</label>
+                                <input type="text" id="orderSenderName" required placeholder="Анна">
+                            </div>
+                            <div class="form-group">
+                                <label for="orderSenderPhone">Ваш телефон *</label>
+                                <input type="tel" id="orderSenderPhone" required placeholder="+7 (777) 000-00-00">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Получатель -->
+                    <div class="form-section">
+                        <h4>2. Кому доставить букет?</h4>
+                        <div class="form-group">
+                            <label class="custom-checkbox">
+                                <input type="checkbox" id="orderIsSurprise">
+                                <span class="checkmark"></span>
+                                <span>Это сюрприз (получатель не я)</span>
+                            </label>
+                        </div>
+                        <div class="surprise-fields" id="surpriseFields" style="display: none;">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="orderRecipientName">Имя получателя</label>
+                                    <input type="text" id="orderRecipientName" placeholder="Елизавета">
+                                </div>
+                                <div class="form-group">
+                                    <label for="orderRecipientPhone">Телефон получателя</label>
+                                    <input type="tel" id="orderRecipientPhone" placeholder="+7 (701) 111-22-33">
+                                </div>
+                            </div>
+                            <label class="custom-checkbox">
+                                <input type="checkbox" id="orderIsAnonymous">
+                                <span class="checkmark"></span>
+                                <span>Анонимная доставка (сохранить ваше имя в секрете)</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Адрес и время -->
+                    <div class="form-section">
+                        <h4>3. Адрес и интервал доставки</h4>
+                        <div class="form-group">
+                            <label for="orderAddress">Адрес доставки *</label>
+                            <input type="text" id="orderAddress" required placeholder="г. Алматы, пр. Абая, д. 25, кв. 42">
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="orderDate">Дата доставки *</label>
+                                <input type="date" id="orderDate" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="orderTimeSlot">Время доставки *</label>
+                                <select id="orderTimeSlot" required>
+                                    <option value="60-min">Срочно (за 60-90 минут)</option>
+                                    <option value="09:00-12:00">Утро (09:00 – 12:00)</option>
+                                    <option value="12:00-15:00">День (12:00 – 15:00)</option>
+                                    <option value="15:00-18:00">Вечер (15:00 – 18:00)</option>
+                                    <option value="18:00-21:00">Поздний вечер (18:00 – 21:00)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="orderComment">Комментарий для курьера или флориста</label>
+                            <input type="text" id="orderComment" placeholder="Домофон, этаж или пожелания по ленте">
+                        </div>
+                    </div>
+
+                    <!-- Оплата -->
+                    <div class="form-section">
+                        <h4>4. Способ оплаты</h4>
+                        <div class="payment-options">
+                            <label class="payment-card active">
+                                <input type="radio" name="paymentMethod" value="card" checked>
+                                <i class="fa-solid fa-credit-card"></i>
+                                <span>Банковская карта онлайн</span>
+                            </label>
+                            <label class="payment-card">
+                                <input type="radio" name="paymentMethod" value="kaspi">
+                                <i class="fa-solid fa-qrcode"></i>
+                                <span>Kaspi QR / Kaspi Pay</span>
+                            </label>
+                            <label class="payment-card">
+                                <input type="radio" name="paymentMethod" value="cash">
+                                <i class="fa-solid fa-hand-holding-dollar"></i>
+                                <span>При получении</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="checkout-footer">
+                    <div class="checkout-total-info">
+                        <span>Сумма к оплате:</span>
+                        <strong id="checkoutFinalAmount">0 ₸</strong>
+                    </div>
+                    <button type="submit" class="btn btn--primary btn--large" id="submitOrderBtn">
+                        <i class="fa-solid fa-check"></i>
+                        <span>Подтвердить и заказать</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Модальное окно подтверждения заказа (Success) -->
+    <div class="modal-backdrop" id="orderSuccessModal" style="display: none;">
+        <div class="modal-window success-modal-window" role="dialog" aria-label="Заказ подтвержден">
+            <button class="modal-close-btn" id="closeSuccessBtn">&times;</button>
+            <div class="success-content text-center">
+                <div class="success-icon-badge">🌸</div>
+                <h2>Спасибо за ваш заказ!</h2>
+                <p class="order-number-text">Номер заказа: <strong id="successOrderNumber">#JR-2026-0001</strong></p>
+                <div class="success-card">
+                    <p>Флорист салона Jardin Rose уже отбирает самые свежие бутоны. Перед отправкой мы пришлем фото композиции в WhatsApp/Telegram.</p>
+                    <div class="success-details-list" id="successOrderDetails"></div>
+                </div>
+                <button class="btn btn--primary" id="successOkBtn">Вернуться в магазин</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно быстрого просмотра (Quick View) -->
+    <div class="modal-backdrop" id="quickViewModal" style="display: none;">
+        <div class="modal-window quick-view-window" role="dialog" aria-label="Детали букета">
+            <button class="modal-close-btn" id="closeQuickViewBtn">&times;</button>
+            <div class="quick-view-grid" id="quickViewContent"></div>
+        </div>
+    </div>
+
+    <!-- Модальное окно Избранного (Wishlist) -->
+    <div class="modal-backdrop" id="wishlistModal" style="display: none;">
+        <div class="modal-window wishlist-window" role="dialog" aria-label="Избранное">
+            <button class="modal-close-btn" id="closeWishlistBtn">&times;</button>
+            <div class="modal-header">
+                <span class="modal-subtitle">Список желаний</span>
+                <h2>Избранные букеты Jardin Rose ❤️</h2>
+                <div class="divider-rose">🌸</div>
+            </div>
+            <div class="wishlist-content" id="wishlistItemsContainer"></div>
+        </div>
+    </div>
+
+    <!-- Контейнер для всплывающих уведомлений -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- =================================================================
+         ПОДКЛЮЧЕНИЕ СКРИПТОВ. Порядок обязателен.
+
+         1) catalog-data.js — снимок каталога из базы. Создаётся командой
+            python -m engine.export. Нужен, чтобы страница показывала
+            букеты даже когда Python-движок не запущен (открытие файла
+            двойным кликом). Если движок работает, main.js берёт свежие
+            данные с сервера, а этот файл просто не используется.
+
+         2) petals.js — фоновая анимация лепестков на холсте.
+
+         3) main.js — вся логика витрины: каталог, корзина, конструктор,
+            заказ. Обращается либо к движку (/api/...), либо к данным
+            из пункта 1.
+         ================================================================= -->
+    <script src="static/js/catalog-data.js"></script>
+    <script src="static/js/petals.js"></script>
+    <script src="static/js/main.js"></script>
+</body>
+</html>
